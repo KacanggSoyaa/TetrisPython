@@ -1,0 +1,11 @@
+{
+    "keybinds": {
+        "move_left": "LEFT",
+        "move_right": "RIGHT",
+        "soft_drop": "DOWN",
+        "hard_drop": "SPACE",
+        "rotate": "UP",
+        "pause": "P",
+        "restart": "R"
+    }
+}
