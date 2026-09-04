@@ -20,10 +20,10 @@ class Tetris:
         self.state = "menu"
         self.menu_selected = 0
         self.settings_selected = 0
-        self.settings_actions = list(DEFAULT_KEYBINDS.keys())
         self.rebinding = False
         self.rebinding_action = None
         self.board = None
+        self._prev_state = None
         self.reset_game()
 
     def reset_game(self):
@@ -40,6 +40,8 @@ class Tetris:
         self.lock_delay = 500
         self.lock_timer = 0
         self.locking = False
+        self.renderer.particles.clear()
+        self.renderer.line_effects.clear()
 
     def get_key_action(self, key):
         lookup = resolve_keybind(self.settings["keybinds"])
@@ -101,10 +103,11 @@ class Tetris:
         return self.current.y + dy
 
     def handle_menu_input(self, event):
+        items = ["Play", "Settings", "Quit"]
         if event.key == pygame.K_UP:
-            self.menu_selected = (self.menu_selected - 1) % 3
+            self.menu_selected = (self.menu_selected - 1) % len(items)
         elif event.key == pygame.K_DOWN:
-            self.menu_selected = (self.menu_selected + 1) % 3
+            self.menu_selected = (self.menu_selected + 1) % len(items)
         elif event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
             if self.menu_selected == 0:
                 self.reset_game()
@@ -112,6 +115,7 @@ class Tetris:
             elif self.menu_selected == 1:
                 self.settings_selected = 0
                 self.rebinding = False
+                self._prev_state = "menu"
                 self.state = "settings"
             elif self.menu_selected == 2:
                 pygame.quit()
@@ -129,17 +133,21 @@ class Tetris:
             return
 
         if event.key == pygame.K_UP:
-            self.settings_selected = (self.settings_selected - 1) % len(self.settings_actions)
+            self.settings_selected = (self.settings_selected - 1) % len(DEFAULT_KEYBINDS)
         elif event.key == pygame.K_DOWN:
-            self.settings_selected = (self.settings_selected + 1) % len(self.settings_actions)
+            self.settings_selected = (self.settings_selected + 1) % len(DEFAULT_KEYBINDS)
         elif event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
-            self.rebinding_action = self.settings_actions[self.settings_selected]
+            self.rebinding_action = list(DEFAULT_KEYBINDS.keys())[self.settings_selected]
             self.rebinding = True
         elif event.key == pygame.K_d:
             self.settings["keybinds"] = DEFAULT_KEYBINDS.copy()
             save_settings(self.settings)
         elif event.key == pygame.K_ESCAPE:
-            self.state = "menu"
+            if self._prev_state == "pause":
+                self.state = "pause"
+            else:
+                self.state = "menu"
+            self._prev_state = None
 
     def handle_pause_input(self, event):
         pause_items = ["Resume", "Settings", "Restart", "Quit"]
@@ -154,8 +162,8 @@ class Tetris:
             elif choice == "Settings":
                 self.settings_selected = 0
                 self.rebinding = False
-                self.state = "settings"
                 self._prev_state = "pause"
+                self.state = "settings"
             elif choice == "Restart":
                 self.reset_game()
                 self.state = "game"
