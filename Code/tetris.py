@@ -3,8 +3,11 @@ import random
 import sys
 from constants import (
     COLS, ROWS, FPS,
-    SPEEDS, SCORE_TABLE, LINES_PER_LEVEL,
+    SCORE_TABLE, LINES_PER_LEVEL,
     SHAPES, DEFAULT_KEYBINDS,
+    DIFFICULTY_NAMES, DIFFICULTY_SPEEDS, DIFFICULTY_ORDER, LINE_GOALS,
+    SPEED_KEYS, SPEED_LABELS, SPEED_UNITS,
+    SPEED_MIN, SPEED_MAX, SPEED_STEP, SPEED_DEFAULTS,
     load_settings, save_settings, resolve_keybind, key_name,
 )
 from piece import Piece
@@ -19,6 +22,9 @@ class Tetris:
         self.settings = load_settings()
         self.state = "menu"
         self.menu_selected = 0
+        self.diff_selected = 0
+        self.lines_selected = 0
+        self.speed_selected = 0
         self.settings_selected = 0
         self.rebinding = False
         self.rebinding_action = None
@@ -35,11 +41,18 @@ class Tetris:
         self.lines = 0
         self.level = 1
         self.game_over = False
+        self.won = False
         self.paused = False
         self.drop_time = 0
         self.lock_delay = 500
         self.lock_timer = 0
         self.locking = False
+        self.das_timer = 0
+        self.das_direction = 0
+        self.das_delay = self.settings["options"].get("das_delay", SPEED_DEFAULTS["das_delay"])
+        self.das_repeat = self.settings["options"].get("das_repeat", SPEED_DEFAULTS["das_repeat"])
+        self.soft_drop_interval = max(1, self.settings["options"].get("soft_drop_ms", SPEED_DEFAULTS["soft_drop_ms"]))
+        self.soft_drop_timer = 0
         self.renderer.particles.clear()
         self.renderer.line_effects.clear()
 
@@ -48,8 +61,10 @@ class Tetris:
         return lookup.get(key)
 
     def get_speed(self):
-        idx = min(self.level - 1, len(SPEEDS) - 1)
-        return SPEEDS[idx]
+        diff = self.settings["options"].get("difficulty", "medium")
+        speeds = DIFFICULTY_SPEEDS.get(diff, DIFFICULTY_SPEEDS["medium"])
+        idx = min(self.level - 1, len(speeds) - 1)
+        return speeds[idx]
 
     def fill_bag(self):
         shapes = list(SHAPES.keys())
@@ -89,6 +104,10 @@ class Tetris:
         if cleared > 0:
             self.renderer.add_line_clear_particles(cleared_rows)
             self.renderer.line_effects.append(LineClearEffect(cleared_rows))
+        goal = self.settings["options"].get("line_goal", 0)
+        if goal and self.lines >= goal:
+            self.won = True
+            return
         self.current = self.next_piece
         self.next_piece = self.new_piece()
         self.locking = False
@@ -103,7 +122,7 @@ class Tetris:
         return self.current.y + dy
 
     def handle_menu_input(self, event):
-        items = ["Play", "Settings", "Quit"]
+        items = ["Play", "Difficulty", "Lines", "Speeds", "Settings", "Quit"]
         if event.key == pygame.K_UP:
             self.menu_selected = (self.menu_selected - 1) % len(items)
         elif event.key == pygame.K_DOWN:
@@ -113,13 +132,81 @@ class Tetris:
                 self.reset_game()
                 self.state = "game"
             elif self.menu_selected == 1:
+                diff = self.settings["options"].get("difficulty", "medium")
+                self.diff_selected = DIFFICULTY_ORDER.index(diff) if diff in DIFFICULTY_ORDER else 0
+                self._prev_state = "menu"
+                self.state = "difficulty"
+            elif self.menu_selected == 2:
+                goal = self.settings["options"].get("line_goal", 20)
+                self.lines_selected = LINE_GOALS.index(goal) if goal in LINE_GOALS else 1
+                self._prev_state = "menu"
+                self.state = "lines"
+            elif self.menu_selected == 3:
+                self.speed_selected = 0
+                self._prev_state = "menu"
+                self.state = "speeds"
+            elif self.menu_selected == 4:
                 self.settings_selected = 0
                 self.rebinding = False
                 self._prev_state = "menu"
                 self.state = "settings"
-            elif self.menu_selected == 2:
+            elif self.menu_selected == 5:
                 pygame.quit()
                 sys.exit()
+
+    def handle_difficulty_input(self, event):
+        diff_options = DIFFICULTY_ORDER
+        if event.key == pygame.K_LEFT:
+            self.diff_selected = (self.diff_selected - 1) % len(diff_options)
+        elif event.key == pygame.K_RIGHT:
+            self.diff_selected = (self.diff_selected + 1) % len(diff_options)
+        elif event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+            self.settings["options"]["difficulty"] = diff_options[self.diff_selected]
+            save_settings(self.settings)
+            self._go_back_from_submenu()
+        elif event.key == pygame.K_ESCAPE:
+            self._go_back_from_submenu()
+
+    def handle_lines_input(self, event):
+        if event.key == pygame.K_LEFT:
+            self.lines_selected = (self.lines_selected - 1) % len(LINE_GOALS)
+        elif event.key == pygame.K_RIGHT:
+            self.lines_selected = (self.lines_selected + 1) % len(LINE_GOALS)
+        elif event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+            self.settings["options"]["line_goal"] = LINE_GOALS[self.lines_selected]
+            save_settings(self.settings)
+            self._go_back_from_submenu()
+        elif event.key == pygame.K_ESCAPE:
+            self._go_back_from_submenu()
+
+    def handle_speeds_input(self, event):
+        if event.key == pygame.K_UP:
+            self.speed_selected = (self.speed_selected - 1) % len(SPEED_KEYS)
+        elif event.key == pygame.K_DOWN:
+            self.speed_selected = (self.speed_selected + 1) % len(SPEED_KEYS)
+        elif event.key == pygame.K_LEFT:
+            self._adjust_speed(-1)
+        elif event.key == pygame.K_RIGHT:
+            self._adjust_speed(1)
+        elif event.key == pygame.K_c:
+            for k, v in SPEED_DEFAULTS.items():
+                self.settings["options"][k] = v
+            save_settings(self.settings)
+        elif event.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_ESCAPE):
+            self._go_back_from_submenu()
+
+    def _adjust_speed(self, direction):
+        key = SPEED_KEYS[self.speed_selected]
+        cur = self.settings["options"].get(key, SPEED_DEFAULTS[key])
+        step = SPEED_STEP[key]
+        newv = max(SPEED_MIN[key], min(SPEED_MAX[key], cur + direction * step))
+        if newv != cur:
+            self.settings["options"][key] = newv
+            save_settings(self.settings)
+
+    def _go_back_from_submenu(self):
+        self.state = self._prev_state or "menu"
+        self._prev_state = None
 
     def handle_settings_input(self, event):
         if self.rebinding:
@@ -184,6 +271,11 @@ class Tetris:
                 self.reset_game()
             return
 
+        if self.won:
+            if action == "restart":
+                self.reset_game()
+            return
+
         if action == "pause":
             self.menu_selected = 0
             self.paused = not self.paused
@@ -195,15 +287,27 @@ class Tetris:
         if action == "move_left":
             if self.board.valid(self.current, -1, 0):
                 self.current.x -= 1
+                self.das_direction = -1
+                self.das_timer = 0
                 if self.locking:
                     self.lock_timer = 0
         elif action == "move_right":
             if self.board.valid(self.current, 1, 0):
                 self.current.x += 1
+                self.das_direction = 1
+                self.das_timer = 0
                 if self.locking:
                     self.lock_timer = 0
-        elif action == "rotate":
+        elif action == "rotate_right":
             if self.try_rotate(1):
+                if self.locking:
+                    self.lock_timer = 0
+        elif action == "rotate_left":
+            if self.try_rotate(-1):
+                if self.locking:
+                    self.lock_timer = 0
+        elif action == "rotate_180":
+            if self.try_rotate(2):
                 if self.locking:
                     self.lock_timer = 0
         elif action == "hard_drop":
@@ -211,21 +315,65 @@ class Tetris:
 
     def handle_game_continuous(self, dt):
         keys = pygame.key.get_pressed()
-        action = None
-        for key_const, act in resolve_keybind(self.settings["keybinds"]).items():
+        lookup = resolve_keybind(self.settings["keybinds"])
+        actions = set()
+        for key_const, act in lookup.items():
             if keys[key_const]:
-                action = act
-                break
+                actions.add(act)
 
-        if action == "soft_drop" and self.board.valid(self.current, 0, 1):
-            self.current.y += 1
-            self.score += 1
-            self.drop_time = 0
+        if "soft_drop" in actions:
+            self.soft_drop_timer += dt
+            while self.soft_drop_timer >= self.soft_drop_interval:
+                self.soft_drop_timer -= self.soft_drop_interval
+                if self.board.valid(self.current, 0, 1):
+                    self.current.y += 1
+                    self.score += 1
+                    self.drop_time = 0
+                else:
+                    self.soft_drop_timer = 0
+                    break
+        else:
+            self.soft_drop_timer = 0
+
+        def holding(action):
+            for key_const, a in lookup.items():
+                if a == action and keys[key_const]:
+                    return True
+            return False
+
+        dirs = []
+        if holding("move_left"):
+            dirs.append(-1)
+        if holding("move_right"):
+            dirs.append(1)
+        if dirs:
+            direction = dirs[-1]
+            if direction != self.das_direction:
+                self.das_direction = direction
+                self.das_timer = 0
+                self._move_piece(direction)
+            else:
+                self.das_timer += dt
+                if self.das_timer >= self.das_delay:
+                    self._move_piece(direction)
+                    self.das_timer = self.das_delay - self.das_repeat
+        else:
+            self.das_direction = 0
+            self.das_timer = 0
+
+    def _move_piece(self, dx):
+        if self.board.valid(self.current, dx, 0):
+            self.current.x += dx
+            if self.locking:
+                self.lock_timer = 0
 
     def get_game_state(self):
         return {
             "state": self.state,
             "menu_selected": self.menu_selected,
+            "diff_selected": self.diff_selected,
+            "lines_selected": self.lines_selected,
+            "speed_selected": self.speed_selected,
             "settings_selected": self.settings_selected,
             "settings": self.settings,
             "rebinding": self.rebinding,
@@ -237,6 +385,7 @@ class Tetris:
             "level": self.level,
             "lines": self.lines,
             "game_over": self.game_over,
+            "won": self.won,
             "paused": self.paused,
             "ghost_y": self.ghost_y() if self.current and not self.game_over else 0,
         }
@@ -253,6 +402,12 @@ class Tetris:
                 if event.type == pygame.KEYDOWN:
                     if self.state == "menu":
                         self.handle_menu_input(event)
+                    elif self.state == "difficulty":
+                        self.handle_difficulty_input(event)
+                    elif self.state == "lines":
+                        self.handle_lines_input(event)
+                    elif self.state == "speeds":
+                        self.handle_speeds_input(event)
                     elif self.state == "settings":
                         self.handle_settings_input(event)
                     elif self.state == "game":
@@ -261,7 +416,7 @@ class Tetris:
                         else:
                             self.handle_game_input(dt, event)
 
-            if self.state == "game" and not self.game_over and not self.paused:
+            if self.state == "game" and not self.game_over and not self.won and not self.paused:
                 self.handle_game_continuous(dt)
                 self.drop_time += dt
                 speed = self.get_speed()

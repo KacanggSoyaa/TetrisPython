@@ -4,6 +4,9 @@ import random
 from constants import (
     CELL, COLS, ROWS, SIDEBAR, WIDTH, HEIGHT,
     COLORS, SHAPES, ACTION_LABELS,
+    DIFFICULTY_NAMES, DIFFICULTY_ORDER, LINE_GOALS,
+    SPEED_KEYS, SPEED_LABELS, SPEED_UNITS,
+    SPEED_MIN, SPEED_MAX, SPEED_DEFAULTS,
 )
 from constants import key_name
 
@@ -273,23 +276,29 @@ class Renderer:
         sep_y = 58
         pygame.draw.line(self.screen, (40, 38, 60), (x - 4, sep_y), (sx + SIDEBAR - 16, sep_y))
 
+        diff_name = DIFFICULTY_NAMES.get(
+            settings["options"].get("difficulty", "medium"), "MEDIUM")
+        goal = settings["options"].get("line_goal", 0)
+        goal_str = str(goal) if goal else "ENDLESS"
+
         labels = [
             ("SCORE", str(score), (180, 180, 200), (255, 255, 255)),
             ("LEVEL", str(level), (180, 180, 200), (255, 255, 255)),
-            ("LINES", str(lines), (180, 180, 200), (255, 255, 255)),
+            ("LINES", f"{lines}/{goal_str}", (180, 180, 200), (255, 255, 255)),
+            ("DIFFICULTY", diff_name, (180, 180, 200), (255, 255, 255)),
         ]
         for i, (label, val, lbl_color, val_color) in enumerate(labels):
-            y = 70 + i * 50
+            y = 70 + i * 38
             lbl = self.small_font.render(label, True, lbl_color)
             self.screen.blit(lbl, (x, y))
             vtxt = self.stats_font.render(val, True, val_color)
             self.screen.blit(vtxt, (x, y + 18))
 
-        sep_y2 = 225
+        sep_y2 = 230
         pygame.draw.line(self.screen, (40, 38, 60), (x - 4, sep_y2), (sx + SIDEBAR - 16, sep_y2))
 
         nxt_lbl = self.small_font.render("NEXT", True, (180, 180, 200))
-        self.screen.blit(nxt_lbl, (x, 238))
+        self.screen.blit(nxt_lbl, (x, 243))
 
         shape = SHAPES[next_piece.shape][0]
         color = next_piece.color
@@ -319,7 +328,9 @@ class Renderer:
 
         controls = [
             ("Move", fmt_key(binds['move_left']), fmt_key(binds['move_right'])),
-            ("Rotate", fmt_key(binds['rotate']), None),
+            ("Rot Right", fmt_key(binds['rotate_right']), None),
+            ("Rot Left", fmt_key(binds['rotate_left']), None),
+            ("Rot 180", fmt_key(binds['rotate_180']), None),
             ("Soft", fmt_key(binds['soft_drop']), None),
             ("Hard", fmt_key(binds['hard_drop']), None),
             ("Pause", fmt_key(binds['pause']), None),
@@ -358,6 +369,29 @@ class Renderer:
         re_text = self.small_font.render("Press R to restart", True, (120, 120, 140))
         self.screen.blit(re_text, (cx - re_text.get_width() // 2, box_y + 110))
 
+    def draw_win(self, score):
+        overlay = pygame.Surface((COLS * CELL, HEIGHT), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 170))
+        self.screen.blit(overlay, (0, 0))
+
+        cx = COLS * CELL // 2
+
+        box_w, box_h = 260, 170
+        box_x = cx - box_w // 2
+        box_y = HEIGHT // 2 - box_h // 2
+        box_rect = pygame.Rect(box_x, box_y, box_w, box_h)
+        pygame.draw.rect(self.screen, (20, 30, 35), box_rect)
+        pygame.draw.rect(self.screen, (70, 110, 90), box_rect, 2)
+
+        win_text = self.big_font.render("YOU WIN!", True, (140, 230, 160))
+        self.screen.blit(win_text, (cx - win_text.get_width() // 2, box_y + 20))
+
+        sc_text = self.font.render(f"Score: {score}", True, (180, 180, 200))
+        self.screen.blit(sc_text, (cx - sc_text.get_width() // 2, box_y + 65))
+
+        re_text = self.small_font.render("Press R to restart", True, (120, 120, 140))
+        self.screen.blit(re_text, (cx - re_text.get_width() // 2, box_y + 115))
+
     def draw_pause(self, menu_selected):
         overlay = pygame.Surface((COLS * CELL, HEIGHT), pygame.SRCALPHA)
         overlay.fill((0, 0, 0, 160))
@@ -388,23 +422,39 @@ class Renderer:
             txt = self.font.render(item, True, color)
             self.screen.blit(txt, (cx - txt.get_width() // 2, y))
 
-    def draw_menu(self, menu_selected):
+    def draw_menu(self, menu_selected, settings):
         self.draw_full_bg()
 
         cx = WIDTH // 2
         title = self.title_font.render("T E T R I S", True, (230, 230, 245))
-        self.screen.blit(title, (cx - title.get_width() // 2, 130))
+        self.screen.blit(title, (cx - title.get_width() // 2, 100))
 
-        underline_y = 180
+        underline_y = 150
         uw = title.get_width() + 20
         pygame.draw.line(self.screen, (80, 80, 110),
                          (cx - uw // 2, underline_y), (cx + uw // 2, underline_y))
 
-        menu_items = ["Play", "Settings", "Quit"]
+        diff_name = DIFFICULTY_NAMES.get(
+            settings["options"].get("difficulty", "medium"), "MEDIUM")
+        goal = settings["options"].get("line_goal", 0)
+        goal_str = str(goal) if goal else "ENDLESS"
+        d = settings["options"].get("das_delay", SPEED_DEFAULTS["das_delay"])
+        r = settings["options"].get("das_repeat", SPEED_DEFAULTS["das_repeat"])
+        s = settings["options"].get("soft_drop_ms", SPEED_DEFAULTS["soft_drop_ms"])
+        speed_summary = f"{d}/{r}/{s}ms"
+
+        menu_items = [
+            "Play",
+            f"Difficulty:  {diff_name}",
+            f"Lines:  {goal_str}",
+            f"Speeds:  {speed_summary}",
+            "Settings",
+            "Quit",
+        ]
         for i, item in enumerate(menu_items):
-            y = 230 + i * 50
+            y = 175 + i * 35
             if i == menu_selected:
-                sel_rect = pygame.Rect(cx - 80, y - 5, 160, 32)
+                sel_rect = pygame.Rect(cx - 140, y - 5, 280, 30)
                 pygame.draw.rect(self.screen, (35, 35, 55), sel_rect)
                 pygame.draw.rect(self.screen, (80, 80, 120), sel_rect, 1)
                 color = (230, 230, 245)
@@ -414,7 +464,141 @@ class Renderer:
             self.screen.blit(txt, (cx - txt.get_width() // 2, y))
 
         sub = self.small_font.render("Arrow Keys + Enter", True, (90, 90, 110))
+        self.screen.blit(sub, (cx - sub.get_width() // 2, 410))
+
+    def draw_difficulty_menu(self, selected, settings):
+        self.draw_full_bg()
+        cx = WIDTH // 2
+
+        title = self.title_font.render("DIFFICULTY", True, (230, 230, 245))
+        self.screen.blit(title, (cx - title.get_width() // 2, 120))
+
+        pygame.draw.line(self.screen, (80, 80, 110),
+                         (cx - 160, 170), (cx + 160, 170))
+
+        hint = self.small_font.render("Left/Right to change  |  Enter to confirm  |  Esc to go back",
+                                      True, (90, 90, 110))
+        self.screen.blit(hint, (cx - hint.get_width() // 2, 200))
+
+        current = settings["options"].get("difficulty", "medium")
+        for i, diff in enumerate(DIFFICULTY_ORDER):
+            y = 240 + i * 46
+            if i == selected:
+                sel_rect = pygame.Rect(cx - 100, y - 5, 200, 34)
+                pygame.draw.rect(self.screen, (35, 35, 55), sel_rect)
+                pygame.draw.rect(self.screen, (80, 80, 120), sel_rect, 1)
+                color = (230, 230, 245)
+            else:
+                color = (150, 150, 170)
+            name = DIFFICULTY_NAMES[diff]
+            label = f"{name}  {'[X]' if diff == current else ''}"
+            txt = self.font.render(label, True, color)
+            self.screen.blit(txt, (cx - txt.get_width() // 2, y))
+
+        sub = self.small_font.render(
+            "Easy: slow  |  Medium: normal  |  Hard: fast",
+            True, (90, 90, 110))
         self.screen.blit(sub, (cx - sub.get_width() // 2, 400))
+
+    def draw_lines_menu(self, selected, settings):
+        self.draw_full_bg()
+        cx = WIDTH // 2
+
+        title = self.title_font.render("LINES TO CLEAR", True, (230, 230, 245))
+        self.screen.blit(title, (cx - title.get_width() // 2, 120))
+
+        pygame.draw.line(self.screen, (80, 80, 110),
+                         (cx - 160, 170), (cx + 160, 170))
+
+        hint = self.small_font.render("Left/Right to change  |  Enter to confirm  |  Esc to go back",
+                                      True, (90, 90, 110))
+        self.screen.blit(hint, (cx - hint.get_width() // 2, 200))
+
+        current = settings["options"].get("line_goal", 0)
+        goal_labels = ["10 LINES", "20 LINES", "40 LINES", "ENDLESS"]
+        for i, goal in enumerate(LINE_GOALS):
+            y = 240 + i * 46
+            if i == selected:
+                sel_rect = pygame.Rect(cx - 100, y - 5, 200, 34)
+                pygame.draw.rect(self.screen, (35, 35, 55), sel_rect)
+                pygame.draw.rect(self.screen, (80, 80, 120), sel_rect, 1)
+                color = (230, 230, 245)
+            else:
+                color = (150, 150, 170)
+            label = f"{goal_labels[i]}  {'[X]' if current == LINE_GOALS[i] else ''}"
+            txt = self.font.render(label, True, color)
+            self.screen.blit(txt, (cx - txt.get_width() // 2, y))
+
+        sub = self.small_font.render(
+            "Clear the target number of lines to win!",
+            True, (90, 90, 110))
+        self.screen.blit(sub, (cx - sub.get_width() // 2, 400))
+
+    def draw_speeds_menu(self, selected, settings):
+        self.draw_full_bg()
+        cx = WIDTH // 2
+
+        title = self.title_font.render("MOVEMENT SPEED", True, (230, 230, 245))
+        self.screen.blit(title, (cx - title.get_width() // 2, 40))
+
+        pygame.draw.line(self.screen, (80, 80, 110),
+                         (cx - 160, 90), (cx + 160, 90))
+
+        hint = self.small_font.render("Up/Down: select row   Left/Right: adjust   Esc: back",
+                                      True, (90, 90, 110))
+        self.screen.blit(hint, (cx - hint.get_width() // 2, 105))
+
+        bar_x = 140
+        bar_w = 260
+        row_y = 140
+        row_h = 80
+        for i, key in enumerate(SPEED_KEYS):
+            y = row_y + i * row_h
+            value = settings["options"].get(key, SPEED_DEFAULTS[key])
+            lo = SPEED_MIN[key]
+            hi = SPEED_MAX[key]
+            frac = max(0.0, min(1.0, (value - lo) / (hi - lo)))
+
+            is_sel = (i == selected)
+
+            lbl_color = (230, 230, 235) if is_sel else (150, 150, 170)
+            lbl = self.font.render(SPEED_LABELS[key], True, lbl_color)
+            self.screen.blit(lbl, (40, y))
+
+            unit = SPEED_UNITS[key]
+            val = self.font.render(f"{value} {unit}", True, (235, 235, 245))
+            self.screen.blit(val, (bar_x + bar_w - val.get_width(), y))
+
+            track_y = y + 34
+            track = pygame.Rect(bar_x, track_y, bar_w, 14)
+            pygame.draw.rect(self.screen, (22, 22, 38), track)
+            pygame.draw.rect(self.screen, (70, 70, 100), track, 1)
+            if is_sel:
+                pygame.draw.rect(self.screen, (90, 110, 170), track, 2)
+
+            fill_w = int(bar_w * frac)
+            if fill_w > 0:
+                fill = pygame.Rect(bar_x, track_y, fill_w, 14)
+                pygame.draw.rect(self.screen, (90, 160, 255), fill)
+
+            knob_x = bar_x + int(bar_w * frac)
+            pygame.draw.rect(self.screen, (240, 245, 255),
+                             (knob_x - 4, track_y - 3, 8, 20))
+            pygame.draw.rect(self.screen, (120, 130, 160),
+                             (knob_x - 4, track_y - 3, 8, 20), 1)
+
+            min_lbl = self.small_font.render(str(lo), True, (90, 90, 110))
+            max_lbl = self.small_font.render(str(hi), True, (90, 90, 110))
+            self.screen.blit(min_lbl, (bar_x, track_y + 20))
+            self.screen.blit(max_lbl, (bar_x + bar_w - max_lbl.get_width(), track_y + 20))
+
+        info = self.small_font.render("Lower = faster   Higher = slower",
+                                      True, (90, 90, 110))
+        self.screen.blit(info, (cx - info.get_width() // 2, 400))
+
+        reset_txt = self.small_font.render("Press C to reset to defaults",
+                                           True, (90, 90, 110))
+        self.screen.blit(reset_txt, (cx - reset_txt.get_width() // 2, 420))
 
     def draw_settings(self, settings_selected, settings, rebinding, rebinding_action):
         self.draw_full_bg()
@@ -481,7 +665,13 @@ class Renderer:
         state = game_state["state"]
 
         if state == "menu":
-            self.draw_menu(game_state["menu_selected"])
+            self.draw_menu(game_state["menu_selected"], game_state["settings"])
+        elif state == "difficulty":
+            self.draw_difficulty_menu(game_state["diff_selected"], game_state["settings"])
+        elif state == "lines":
+            self.draw_lines_menu(game_state["lines_selected"], game_state["settings"])
+        elif state == "speeds":
+            self.draw_speeds_menu(game_state["speed_selected"], game_state["settings"])
         elif state == "settings":
             self.draw_settings(
                 game_state["settings_selected"],
@@ -515,6 +705,8 @@ class Renderer:
 
             if game_state["game_over"]:
                 self.draw_game_over(game_state["score"])
+            elif game_state["won"]:
+                self.draw_win(game_state["score"])
             elif game_state["paused"]:
                 self.draw_pause(game_state["menu_selected"])
 
