@@ -1,4 +1,4 @@
-"""Layout audit: records every draw op and checks containment / overlap."""
+# Layout audit: records every draw op and checks containment / overlap.
 import os
 import sys
 
@@ -13,6 +13,12 @@ from tetris import Tetris
 BOUNDS = []
 
 
+# Audit every screen for text that leaves the window or overlaps.
+#
+# Runs in two passes. The first wraps the draw primitives and checks that
+# nothing is drawn outside the window, which catches clipped labels. The
+# second wraps them again to tag text with a layer, so the overlay checks
+# can tell "text over a card" apart from "text over text".
 def main():
     game = Tetris()
     r = game.renderer
@@ -21,6 +27,7 @@ def main():
     real_keycap = r.keycap
     real_draw = pygame.draw.rect
 
+    # Pass 1 wrappers: record the rect of everything drawn to the screen.
     def blit_t(text, x, y, name="body", color=None, center=False, right=False):
         rect = real_blit(text, x, y, name, color, center, right)
         BOUNDS.append(("text:" + str(text)[:26], rect.copy()))
@@ -48,6 +55,7 @@ def main():
 
     problems = []
 
+    # Draw one screen and report anything not fully inside the window.
     def audit(label):
         BOUNDS.clear()
         r.draw_all(game.get_game_state(), 16)
@@ -61,6 +69,8 @@ def main():
     states = ["menu", "difficulty", "lines", "speeds", "settings"]
     for s in states:
         game.state = s
+        # Every selection index, because the widest label is often the selected
+        # row and every row draws its highlight bar.
         for sel in range(6):
             key = {"menu": "menu_selected", "difficulty": "diff_selected",
                    "lines": "lines_selected", "speeds": "speed_selected",
@@ -68,6 +78,8 @@ def main():
             setattr(game, key, sel)
             audit(f"{s}[{sel}]")
 
+    # A tall colourful stack plus popups and large numbers: the worst case for
+    # text width in the sidebar and the well.
     game.state = "game"
     game.reset_game()
     for y in (14, 16, 19):
@@ -92,6 +104,7 @@ def main():
     audit("game-longest-keys")
     game.settings["keybinds"] = constants.DEFAULT_KEYBINDS.copy()
 
+    # every pause and game-over selection, since only the selected row is wider
     game.paused = True
     for sel in range(4):
         game.menu_selected = sel
@@ -107,7 +120,7 @@ def main():
         game.over_selected = sel
         audit(f"over[{sel}]")
 
-    # sidebar panel geometry
+    # sidebar panel geometry: must fit and must not touch the next panel
     panels = [
         pygame.Rect(constants.SIDE_X, 48, constants.SIDEBAR, 130),
         pygame.Rect(constants.SIDE_X, 186, constants.SIDEBAR, 58),
@@ -120,6 +133,7 @@ def main():
             problems.append(f"sidebar panel {i} outside window: {p}")
         if i and panels[i - 1].colliderect(p):
             problems.append(f"sidebar panels {i-1}/{i} overlap")
+    # printed so a regression in the numbers is visible even when it passes
     print("sidebar stack:", " -> ".join(f"{p.top}..{p.bottom}" for p in panels),
           f"window height {constants.HEIGHT}")
     print("window:", constants.WIDTH, "x", constants.HEIGHT)
@@ -129,6 +143,7 @@ def main():
     for action in constants.ACTION_LABELS:
         label = constants.ACTION_LABELS[action]
         from constants import key_name
+        # check the shortest and the longest bindable key name per action
         for key_name_str in ("LEFT SHIFT", "SPACE", "A", "RETURN", "RIGHT SHIFT"):
             disp = key_name(pygame.key.key_code(key_name_str))
             w = max(r.txt(label, "tiny").get_width(), r.txt(disp, "key").get_width() + 14)
@@ -142,6 +157,7 @@ def main():
     # --- text alignment: no two strings may overlap, columns must line up ---
     # Texts are tagged with the layer they were drawn on: the live view (0) or an
     # overlay card (1). An opaque card legitimately covers the view beneath it.
+    # Collected per screen: (label, rect, layer) for text, option rows, and cards.
     text_rects = []
     row_rects = []
     card_rects = []
@@ -152,6 +168,8 @@ def main():
     real_draw_over = r.draw_over
     real_draw_pause = r.draw_pause
 
+    # Pass 2 wrappers: same recording, plus the layer tag that separates the
+    # live view from the overlay card drawn on top of it.
     def blit_t2(text, x, y, name="body", color=None, center=False, right=False):
         rect = real_blit_t2(text, x, y, name, color, center, right)
         text_rects.append((str(text)[:24], rect.copy(), layer["v"]))
@@ -210,6 +228,7 @@ def main():
             rows = list(row_rects)
             cards = list(card_rects)
 
+            # 1. no two strings on the same layer may overlap
             for i in range(len(texts)):
                 ti, ri, li = texts[i]
                 for j in range(i + 1, len(texts)):
@@ -260,6 +279,8 @@ def main():
 
             info = ""
             if width:
+                # 4. option columns: labels all start at the left edge and
+                # values all end at the right edge, so they must not collide
                 left_edge = row_cx - width // 2 + pad
                 right_edge = row_cx + width // 2 - pad
                 labels = [rect for _, rect, _ in texts

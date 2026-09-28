@@ -1,8 +1,17 @@
+# Every tunable number, colour, and lookup table the game uses.
+#
+# Nothing in this file has behaviour beyond the four settings helpers at the
+# bottom. Keeping the data here means the rules engine, the renderer, and the
+# tests all read the same source of truth, and adjusting feel (gravity, scoring,
+# lock delay) never means hunting through logic.
 import os
 import json
 import pygame
 
 # --------------------------------------------------------------- geometry
+
+# Board size and window layout. The window is derived from the well so the
+# playfield and the sidebar always stay in proportion.
 CELL = 30
 COLS = 10
 ROWS = 20
@@ -27,6 +36,9 @@ FPS = 60
 PREVIEW_COUNT = 3
 
 # ----------------------------------------------------------------- theme
+
+# One dark palette shared by the game view, the menus, and the overlays.
+# Every colour the renderer draws comes from here.
 THEME = {
     "bg_top": (9, 9, 19),
     "bg_bottom": (19, 17, 36),
@@ -53,6 +65,7 @@ THEME = {
     "bad": (240, 96, 100),
 }
 
+# Piece fill colours, keyed by tetromino letter.
 COLORS = {
     "I": (56, 206, 226),
     "O": (245, 205, 60),
@@ -63,6 +76,8 @@ COLORS = {
     "L": (242, 152, 48),
 }
 
+# Tetromino geometry. Each letter holds four rotation states, and each state
+# is the four filled offsets inside a 4x4 box, clockwise from spawn.
 SHAPES = {
     "I": [[(0, 1), (1, 1), (2, 1), (3, 1)],
           [(2, 0), (2, 1), (2, 2), (2, 3)],
@@ -95,6 +110,8 @@ SHAPES = {
 }
 
 # ---------------------------------------------------------------- scoring
+
+# Points are multiplied by the current level, which rises every 10 lines.
 LINES_PER_LEVEL = 10
 SCORE_TABLE = {1: 100, 2: 300, 3: 500, 4: 800}
 CLEAR_LABELS = {1: "SINGLE", 2: "DOUBLE", 3: "TRIPLE", 4: "TETRIS!"}
@@ -106,11 +123,17 @@ SOFT_DROP_POINTS = 1
 HARD_DROP_POINTS = 2
 
 # ----------------------------------------------------------------- timing
+
+# Lock delay is how long a grounded piece waits for a last-second input.
+# The two clear timings drive the flash-then-glow line-clear animation.
 LOCK_DELAY = 500
 CLEAR_FLASH_MS = 170
 CLEAR_GLOW_MS = 150
 
 # ------------------------------------------------------------- difficulty
+
+# Display names, one-line blurbs, and per-level gravity in milliseconds.
+# The speed list is indexed by level-1 and clamped to its last entry.
 DIFFICULTY_NAMES = {
     "easy": "EASY",
     "medium": "MEDIUM",
@@ -131,9 +154,12 @@ DIFFICULTY_SPEEDS = {
 
 DIFFICULTY_ORDER = ["easy", "medium", "hard"]
 
+# Win condition. 0 means endless, so the game only ends by topping out.
 LINE_GOALS = [10, 20, 40, 0]
 LINE_GOAL_LABELS = ["10 LINES", "20 LINES", "40 LINES", "ENDLESS"]
 
+# The three slider settings, with their bounds, step, and fallback values.
+# DAS = delayed auto-shift: the hold delay before auto-repeat kicks in.
 SPEED_KEYS = ["das_delay", "das_repeat", "soft_drop_ms"]
 SPEED_LABELS = {
     "das_delay": "Move Hold Delay",
@@ -165,6 +191,7 @@ SPEED_DEFAULTS = {
     "das_repeat": 50,
     "soft_drop_ms": 33,
 }
+# Named speed presets, kept only so older settings files still load.
 SPEED_TIERS = {
     "slow": {"das_delay": 260, "das_repeat": 90, "soft_drop_ms": 83},
     "normal": {"das_delay": 170, "das_repeat": 50, "soft_drop_ms": 33},
@@ -172,6 +199,9 @@ SPEED_TIERS = {
 }
 
 # --------------------------------------------------------------- settings
+
+# Persisted to settings.json next to the Code folder, so custom binds and the
+# best score survive between runs.
 SETTINGS_FILE = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "..", "settings.json")
 
@@ -196,6 +226,7 @@ DEFAULT_KEYBINDS = {
     "restart": "R",
 }
 
+# Every rebindable action and the label shown in the settings screen.
 ACTION_LABELS = {
     "move_left": "Move Left",
     "move_right": "Move Right",
@@ -209,11 +240,19 @@ ACTION_LABELS = {
     "restart": "Restart",
 }
 
+# Row labels for the main menu, the pause overlay, and the game-over overlay.
 MENU_ITEMS = ["Play", "Difficulty", "Lines", "Speeds", "Settings", "Quit"]
 PAUSE_ITEMS = ["Resume", "Settings", "Restart", "Quit"]
 OVER_ITEMS = ["Restart", "Main Menu"]
 
 
+# Read settings.json and return a clean, validated settings dict.
+#
+# Never raises: a missing, corrupt, or hand-edited file falls back to the
+# defaults. Unknown keys are dropped, speed values are clamped to their
+# allowed range, and the legacy "speed" tier is expanded into the three
+# individual sliders. The result is always
+# `{"keybinds": {...}, "options": {...}, "high": int}`.
 def load_settings():
     data = {}
     try:
@@ -254,11 +293,13 @@ def load_settings():
     return {"keybinds": binds, "options": opts, "high": high}
 
 
+# Write the settings dict back to settings.json, pretty-printed.
 def save_settings(settings):
     with open(SETTINGS_FILE, "w") as f:
         json.dump(settings, f, indent=4)
 
 
+# Pygame key constant to the uppercase name shown in the UI ("LEFT SHIFT").
 def key_name(k):
     if k is None:
         return "---"
@@ -268,6 +309,10 @@ def key_name(k):
     return name.upper()
 
 
+# Invert the action->name mapping into a key constant -> action lookup.
+#
+# The game loop does this every frame, so a key press is a single dict hit.
+# Names that pygame cannot parse are skipped instead of crashing.
 def resolve_keybind(keybinds):
     lookup = {}
     for action, key_str in keybinds.items():

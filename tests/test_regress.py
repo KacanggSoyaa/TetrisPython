@@ -1,5 +1,5 @@
-"""Regression checks for the fixes: pause keys, submenu navigation, best combo,
-perfect-clear gating, and the clear-animation render state."""
+# Regression checks for the fixes: pause keys, submenu navigation, best combo,
+# perfect-clear gating, and the clear-animation render state.
 import os
 import sys
 
@@ -14,10 +14,14 @@ from piece import Piece
 from tetris import Tetris
 
 
+# Build a synthetic KEYDOWN event for a given key constant.
 def key(code):
     return pygame.event.Event(pygame.KEYDOWN, key=code, mod=0, unicode="", scancode=0)
 
 
+# Force the given rows to clear, then run scoring for that lock.
+#
+# Bypasses the animation so `resolve_clear` can be tested directly.
 def clear(game, rows):
     for r in rows:
         for c in range(constants.COLS):
@@ -27,6 +31,10 @@ def clear(game, rows):
     game.resolve_clear()
 
 
+# Assert the behaviours that previously regressed.
+#
+# Covers pause keys, submenu navigation, combo and best_combo bookkeeping,
+# perfect-clear gating, the clear-animation state, and T-spin detection.
 def main():
     game = Tetris()
 

@@ -1,4 +1,4 @@
-"""Headless smoke test: walks every screen and game phase, saving screenshots."""
+# Headless smoke test: walks every screen and game phase, saving screenshots.
 import os
 import random
 import sys
@@ -17,21 +17,30 @@ OUT = os.environ.get("TETRIS_TEST_SHOTS") or os.path.join(
     tempfile.gettempdir(), "tetris_shots")
 os.makedirs(OUT, exist_ok=True)
 
+# The game writes settings.json, so snapshot it here and put it back at the end
+# of the run rather than leaving the player's file modified.
 SETTINGS_BACKUP = None
 if os.path.exists(constants.SETTINGS_FILE):
     with open(constants.SETTINGS_FILE) as f:
         SETTINGS_BACKUP = f.read()
 
 
+# Build a synthetic KEYDOWN event, as Pygame would deliver from a real key.
 def key(k):
     return pygame.event.Event(pygame.KEYDOWN, key=k, mod=0, unicode="", scancode=0)
 
 
+# Render the current state and save it to the screenshots folder.
 def shot(game, name):
     game.renderer.draw_all(game.get_game_state(), 16)
     pygame.image.save(game.renderer.screen, os.path.join(OUT, name + ".png"))
 
 
+# Walk every screen and every game phase, asserting as we go.
+#
+# A fixed RNG seed keeps the random-play section reproducible. The long fuzz
+# run at the end is the broad crash check; anything that raises fails the
+# file. settings.json is restored before the success message prints.
 def main():
     random.seed(7)
     game = game_mod.Tetris()

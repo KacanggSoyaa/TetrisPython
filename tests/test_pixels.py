@@ -1,5 +1,5 @@
-"""Pixel assertions: the well must show the stack, ghost, and active piece in the
-right cells. Run after any renderer change."""
+# Pixel assertions: the well must show the stack, ghost, and active piece in the
+# right cells. Run after any renderer change.
 import os
 import sys
 
@@ -14,14 +14,24 @@ from tetris import Tetris
 W, H = constants.WIDTH, constants.HEIGHT
 
 
+# Pixel at the centre of board cell (cx, cy), for colour sampling.
+#
+# The +15 offset is half a cell, which lands inside the block's solid middle
+# rather than on a bevelled edge.
 def cell_px(cx, cy):
     return constants.WELL_X + cx * constants.CELL + 15, constants.WELL_Y + cy * constants.CELL + 15
 
 
+# True when two RGB colours are within `tol` per channel.
 def near(a, b, tol=26):
     return all(abs(x - y) <= tol for x, y in zip(a[:3], b[:3]))
 
 
+# Sample the rendered screen and check the important pixels.
+#
+# Sets up a known board, piece, previews, and score, then verifies the
+# active piece, ghost, stack, background, sidebar panels, and keycaps all
+# drew where and how they should.
 def main():
     game = Tetris()
     r = game.renderer

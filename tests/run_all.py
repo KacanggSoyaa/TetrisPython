@@ -1,15 +1,19 @@
-"""Run every test in this folder. Headless, no repository files are modified.
-
-    python tests/run_all.py
-"""
+# Run every test in this folder. Headless, no repository files are modified.
+#
+#     python tests/run_all.py
 import os
 import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+# Order matters only for readability: fast smoke first, layout audit last.
 TESTS = ["test_smoke.py", "test_regress.py", "test_pixels.py", "test_layout.py"]
 
 
+# Run every test file in a subprocess and report an overall result.
+#
+# Subprocesses isolate the module-level Pygame state between files, so one
+# test cannot leave a dirty screen or keybinds behind for the next.
 def main():
     failed = []
     for name in TESTS:
