@@ -1,11 +1,13 @@
 # Tetris Python
 
-A classic 2D Tetris game built with Pygame. Features a scoreboard, level progression, line tracking, next piece preview, ghost piece, and fully rebindable controls.
+A modern take on classic 2D Tetris built with Pygame. Full menu flow, ghost piece,
+hold, three-piece preview, T-spin detection, combo/back-to-back/perfect-clear scoring,
+persisted high score, and fully rebindable controls.
 
 ## How to Run
 
 ```bash
-python Code/tetris.py
+python Code/main.py
 ```
 
 Requires Python 3 and Pygame (`pip install pygame`).
@@ -16,9 +18,13 @@ Requires Python 3 and Pygame (`pip install pygame`).
 
 | Screen | Navigation |
 |--------|-----------|
-| **Main Menu** | Arrow keys to highlight, Enter to select |
-| **Pause Menu** | Press your Pause key during gameplay |
-| **Settings** | Arrow keys to select a binding, Enter to rebind, Esc to go back |
+| **Main Menu** | Up / Down to highlight, Enter to select |
+| **Pause Menu** | Press Pause (or `Esc`) during gameplay; `Esc` or Pause resumes |
+| **Options** | Left / Right to change a value, `C` resets speeds, `Esc` goes back |
+| **Settings** | Up / Down to select an action, Enter to rebind, `D` resets all bindings, `Esc` goes back |
+| **Game Over** | Up / Down to highlight, Enter or Space to confirm, `Esc` for the main menu |
+
+Both submenus and options screens accept Up / Down as well as Left / Right.
 
 ---
 
@@ -28,56 +34,79 @@ Requires Python 3 and Pygame (`pip install pygame`).
 |--------|-------------|-------------|
 | Move Left | `Left Arrow` | Move piece one column left |
 | Move Right | `Right Arrow` | Move piece one column right |
-| Rotate | `Up Arrow` | Rotate piece clockwise with wall kick support |
-| Soft Drop | `Down Arrow` |加速 dropping, awards 1 point per cell |
-| Hard Drop | `Space` | Instantly drops piece to bottom, awards 2 points per cell |
-| Pause | `P` | Opens pause menu with Resume / Settings / Restart / Quit |
-| Restart | `R` | Resets the current game |
+| Rotate CW | `Up Arrow` | Rotate clockwise, with wall kick support |
+| Rotate CCW | `Z` | Rotate counter-clockwise |
+| Rotate 180 | `X` | Flip the piece upside down |
+| Soft Drop | `Down Arrow` | Speed up the drop, 1 point per cell |
+| Hard Drop | `Space` | Slam to the floor, 2 points per cell |
+| Hold | `Left Shift` | Stash the current piece and pull the held one |
+| Pause | `P` | Opens pause menu (Resume / Settings / Restart / Main Menu) |
+| Restart | `R` | Restarts the current run |
 
-All controls can be changed in the **Settings** menu. Press `Escape` during gameplay to open the pause menu.
+All ten actions can be rebound in **Settings** — pick an action, press Enter, then press
+the new key. Bindings are checked for conflicts, saved to `settings.json`, and reloaded on
+the next launch.
 
 ---
 
 ## Game Features
 
-### Scoreboard
-- **Score** increases by clearing lines: 1 line = 100, 2 = 300, 3 = 500, 4 (Tetris) = 800. The base score is multiplied by the current level.
-- Soft drops add 1 point per cell, hard drops add 2 points per cell.
+### Scoring
+
+- Clearing lines awards base points multiplied by the current level:
+  Single 100, Double 300, Triple 500, Tetris 800.
+- **Soft drop** adds 1 point per cell, **hard drop** 2 points per cell.
+- **T-spins** (rotating a T piece into its own notch) pay 400 / 800 / 1200 / 1600 for
+  0–3 lines, instead of the normal line values.
+- **Back-to-back** multiplies difficult clears (Tetrises and T-spin line clears) by 1.5.
+- **Combo** adds 50 × combo × level for each consecutive line-clearing lock.
+- **Perfect clear** (emptying the whole well) adds a flat 1800 × level bonus.
+- Your best score is stored in `settings.json` and shown on the game-over card.
 
 ### Level System
-- You start at **Level 1**.
-- Every **10 lines** cleared increases your level by 1.
-- Higher levels increase the gravity speed (pieces fall faster).
 
-### Lines Counter
-- Tracks the total number of lines cleared.
+- You start at **Level 1**; every **10 lines** raises the level by 1.
+- Levels 1–15 map to a gravity interval for the chosen difficulty (see below).
 
-### Next Piece Preview
-- Shows the upcoming piece in the sidebar so you can plan ahead.
+### Board & Pieces
 
-### Ghost Piece
-- A translucent outline shows where the current piece will land.
+- **10 × 20** well with a **3-piece** upcoming queue and a hold slot.
+- **7-bag randomizer**: pieces are dealt in shuffled bags of all 7 types, so droughts
+  are bounded and every piece stays playable.
+- **Ghost piece** shows the exact landing position.
+- **Lock delay** of 500ms lets you slide or rotate a grounded piece before it locks.
+- **7-bag + wall kicks** (SRS-style offsets) let pieces rotate against walls and floors.
+- **T-spin detection** checks the three corners around a rotated T piece.
 
-### Lock Delay
-- When a piece lands, you have a brief window (500ms) to slide or rotate it before it locks in place.
+### Modes & Difficulty
 
-### 7-Bag Randomizer
-- Pieces are dealt in shuffled bags of all 7 types, ensuring fair distribution.
+- **Difficulty** — Easy, Medium, Hard; each has its own 15-level gravity curve.
+- **Line goal** — 10, 20, 40, or Endless. Reach the goal and you get a win screen;
+  Endless keeps the high-score run going.
+- **Speeds** — tune DAS delay, DAS repeat, soft-drop rate, and lock delay to taste.
+
+### Feel
+
+- Line clears flash, then collapse with a glow before the next piece spawns
+  (170ms flash + 150ms glow).
+- Screen shake on Tetrises and goal wins, particle bursts, and floating score popups.
+- Pause, win, and game-over overlays share the same panel styling as the menus.
 
 ---
 
 ## Settings / Keybinds
 
-Open the Settings screen from the **Main Menu** or **Pause Menu**.
+Open Settings from the **Main Menu** or the **Pause Menu**.
 
 | Key | Action in Settings |
 |-----|-------------------|
 | `Up` / `Down` | Navigate between actions |
-| `Enter` | Start rebinding the selected action (press any key) |
-| `Escape` | Cancel rebinding / Go back to previous menu |
-| `D` | Reset all keybinds to default |
+| `Enter` | Start rebinding the selected action (then press any key) |
+| `Escape` | Cancel rebinding / go back to the previous screen |
+| `D` | Reset all keybinds to defaults |
 
-Your custom keybinds are saved to `settings.json` and persist between sessions.
+Options (difficulty, line goal, speeds) and the high score live in the same
+`settings.json` file at the repository root.
 
 ---
 
@@ -86,10 +115,15 @@ Your custom keybinds are saved to `settings.json` and persist between sessions.
 ```
 TetrisPython/
 ├── Code/
-│   └── tetris.py       # Main game file
-├── Audio/               # (reserved for sound effects)
-├── Graphic/             # (reserved for sprite assets)
-├── settings.json        # Auto-generated keybind config
+│   ├── main.py        # entry point
+│   ├── tetris.py      # game loop, state machine, scoring, input
+│   ├── board.py       # playfield grid, locking, line clearing
+│   ├── piece.py       # tetromino definitions and rotation state
+│   ├── renderer.py    # all drawing: well, sidebar, menus, effects
+│   └── constants.py   # geometry, theme, tuning, settings IO
+├── Audio/             # (reserved for sound effects)
+├── Graphic/           # (reserved for sprite assets)
+├── settings.json      # persisted options, keybinds, high score
 └── README.md
 ```
 
@@ -97,23 +131,27 @@ TetrisPython/
 
 ## Scoring Breakdown
 
-| Lines Cleared | Base Points | × Level |
-|---------------|------------|---------|
-| 1 (Single) | 100 | × level |
-| 2 (Double) | 300 | × level |
-| 3 (Triple) | 500 | × level |
-| 4 (Tetris) | 800 | × level |
+| Clear | Base Points | × Level |
+|-------|-------------|---------|
+| Single | 100 | × level |
+| Double | 300 | × level |
+| Triple | 500 | × level |
+| Tetris | 800 | × level |
+| T-Spin (0–3 lines) | 400 / 800 / 1200 / 1600 | × level |
+| Back-to-back difficult clear | ×1.5 on top | — |
+| Combo (n-th consecutive clear) | 50 × n | × level |
+| Perfect clear | +1800 | × level |
 
 ---
 
-## Level Speed Table
+## Level Speed Table (ms per row)
 
-| Level | Drop Interval (ms) |
-|-------|-------------------|
-| 1 | 800 |
-| 2 | 720 |
-| 3 | 630 |
-| 5 | 470 |
-| 8 | 220 |
-| 10 | 100 |
-| 15 | 30 |
+| Level | Easy | Medium | Hard |
+|-------|------|--------|------|
+| 1 | 900 | 700 | 420 |
+| 2 | 800 | 600 | 350 |
+| 3 | 700 | 520 | 295 |
+| 5 | 550 | 390 | 200 |
+| 8 | 360 | 250 | 105 |
+| 10 | 260 | 180 | 75 |
+| 15 | 125 | 85 | 38 |

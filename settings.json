@@ -7,14 +7,16 @@
         "rotate_right": "Z",
         "rotate_left": "X",
         "rotate_180": "C",
+        "hold": "LEFT SHIFT",
         "pause": "P",
         "restart": "R"
     },
     "options": {
-        "difficulty": "medium",
+        "difficulty": "hard",
         "line_goal": 10,
-        "das_delay": 70,
+        "das_delay": 110,
         "das_repeat": 20,
         "soft_drop_ms": 17
-    }
+    },
+    "high": 918
 }
