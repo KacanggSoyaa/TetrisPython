@@ -827,25 +827,25 @@ class Renderer:
     def draw_pause(self, selected):
         self.screen.blit(self.well_dim, (WELL_X, WELL_Y))
         cx = WELL_X + WELL_W // 2
-        top = HEIGHT // 2 - 118
-        self.panel(pygame.Rect(cx - 120, top, 240, 236), "panel", 240)
-        self.blit_t("PAUSED", cx, top + 18, "h2", THEME["text"], center=True)
+        top = HEIGHT // 2 - 132
+        self.panel(pygame.Rect(cx - 120, top, 240, 264), "panel", 240)
+        self.blit_t("PAUSED", cx, top + 20, "h2", THEME["text"], center=True)
         pygame.draw.line(self.screen, THEME["border"],
-                         (cx - 92, top + 52), (cx + 92, top + 52))
+                         (cx - 92, top + 54), (cx + 92, top + 54))
         for i, item in enumerate(PAUSE_ITEMS):
-            self._option_row(cx, top + 78 + i * 38, item, i == selected, width=200)
-        self.blit_t("ESC  resume", cx, top + 220, "small", THEME["text_faint"], center=True)
+            self._option_row(cx, top + 82 + i * 40, item, i == selected, width=200)
+        self.blit_t("ESC  resume", cx, top + 248, "small", THEME["text_faint"], center=True)
 
     def draw_over(self, st):
         self.screen.blit(self.dim, (0, 0))
         cx = WIDTH // 2
         won = st["won"]
-        card = pygame.Rect(cx - 178, HEIGHT // 2 - 176, 356, 352)
+        card = pygame.Rect(cx - 178, HEIGHT // 2 - 204, 356, 408)
         accent = THEME["ok"] if won else THEME["bad"]
         self.panel(card, "panel", 245, accent, 16, 2)
-        self.blit_t("GOAL REACHED" if won else "GAME OVER", cx, card.y + 26, "h1",
+        self.blit_t("GOAL REACHED" if won else "GAME OVER", cx, card.y + 42, "h1",
                     accent, center=True)
-        self.blit_t("nice run" if won else "the stack topped out", cx, card.y + 68,
+        self.blit_t("nice run" if won else "the stack topped out", cx, card.y + 79,
                     "small", THEME["text_faint"], center=True)
 
         rows = [
@@ -856,19 +856,21 @@ class Renderer:
             ("BEST COMBO", f"x{max(st['best_combo'], 0)}"),
             ("TIME", self._clock(st["elapsed"])),
         ]
-        y = card.y + 98
+        y = card.y + 106
         for label, value in rows:
             self.blit_t(label, card.x + 30, y, "small", THEME["text_faint"])
             self.blit_t(value, card.right - 30, y - 2, "val", THEME["text"], right=True)
             y += 26
         pygame.draw.line(self.screen, THEME["border"],
-                         (card.x + 26, card.y + 262), (card.right - 26, card.y + 262))
+                         (card.x + 26, card.y + 270), (card.right - 26, card.y + 270))
         best = st["settings"].get("high", 0)
-        self.blit_t(f"BEST  {best:,}", cx, card.y + 272, "small", THEME["accent"], center=True)
+        self.blit_t(f"BEST  {best:,}", cx, card.y + 292, "small", THEME["accent"], center=True)
 
+        # Button labels share the stat label column (card.x + 30) so the whole
+        # card reads as one grid: row.x + pad == card.x + 30.
         for i, item in enumerate(OVER_ITEMS):
-            self._option_row(cx, card.y + 302 + i * 30, item,
-                             i == st["over_selected"], width=300)
+            self._option_row(cx, card.y + 326 + i * 40, item,
+                             i == st["over_selected"], width=328)
 
     # ---------------------------------------------------------------- loop
     def draw_all(self, st, dt=16):

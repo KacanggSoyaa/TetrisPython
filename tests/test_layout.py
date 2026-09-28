@@ -143,8 +143,12 @@ def main():
     # Texts are tagged with the layer they were drawn on: the live view (0) or an
     # overlay card (1). An opaque card legitimately covers the view beneath it.
     text_rects = []
+    row_rects = []
+    card_rects = []
     layer = {"v": 0}
     real_blit_t2 = r.blit_t
+    real_option_row = r._option_row
+    real_panel2 = r.panel
     real_draw_over = r.draw_over
     real_draw_pause = r.draw_pause
 
@@ -153,38 +157,58 @@ def main():
         text_rects.append((str(text)[:24], rect.copy(), layer["v"]))
         return rect
 
+    def option_row2(cx, y, text, selected, right_text=None, **kw):
+        out = real_option_row(cx, y, text, selected, right_text, **kw)
+        row_rects.append((str(text)[:24], out.copy(), layer["v"]))
+        return out
+
+    def panel2(rect, *a, **kw):
+        out = real_panel2(rect, *a, **kw)
+        if layer["v"] == 1:
+            card_rects.append(rect.copy())
+        return out
+
     def draw_over(st):
         layer["v"] = 1
+        card_rects.clear()
         return real_draw_over(st)
 
     def draw_pause(selected):
         layer["v"] = 1
+        card_rects.clear()
         return real_draw_pause(selected)
 
     r.blit_t = blit_t2
+    r._option_row = option_row2
+    r.panel = panel2
     r.draw_over = draw_over
     r.draw_pause = draw_pause
 
     well_cx = constants.WELL_X + constants.WELL_W // 2
+    # (name, state, option-row width, row centre x, label pad)
     screens = [
-        ("menu", "menu", 356, constants.WIDTH // 2),
-        ("difficulty", "difficulty", None, constants.WIDTH // 2),
-        ("lines", "lines", 300, constants.WIDTH // 2),
-        ("speeds", "speeds", None, constants.WIDTH // 2),
-        ("settings", "settings", None, constants.WIDTH // 2),
-        ("pause", "game", 200, well_cx),
-        ("over", "game", 300, constants.WIDTH // 2),
+        ("menu", "menu", 356, constants.WIDTH // 2, 16),
+        ("difficulty", "difficulty", None, constants.WIDTH // 2, 16),
+        ("lines", "lines", 300, constants.WIDTH // 2, 16),
+        ("speeds", "speeds", None, constants.WIDTH // 2, 16),
+        ("settings", "settings", None, constants.WIDTH // 2, 16),
+        ("pause", "game", 200, well_cx, 16),
+        ("over", "game", 328, constants.WIDTH // 2, 16),
     ]
     try:
-        for name, state, width, row_cx in screens:
+        for name, state, width, row_cx, pad in screens:
             game.state = state
             game.paused = state == "game" and name == "pause"
             game.game_over = name == "over"
             game.won = False
             layer["v"] = 0
             text_rects.clear()
+            row_rects.clear()
+            card_rects.clear()
             r.draw_all(game.get_game_state(), 16)
             texts = list(text_rects)
+            rows = list(row_rects)
+            cards = list(card_rects)
 
             for i in range(len(texts)):
                 ti, ri, li = texts[i]
@@ -196,10 +220,48 @@ def main():
                         problems.append(
                             f"{name}: text overlap '{ti}' {ri} vs '{tj}' {rj}")
 
+            # option-row backgrounds must not overlap each other
+            for i in range(len(rows)):
+                ni, ri, li = rows[i]
+                for j in range(i + 1, len(rows)):
+                    nj, rj, lj = rows[j]
+                    if ri.colliderect(rj):
+                        problems.append(
+                            f"{name}: option rows overlap '{ni}' {ri} vs '{nj}' {rj}")
+
+            # each overlay row must sit inside the card it belongs to
+            if rows and cards:
+                card = max(cards, key=lambda q: q.w * q.h)
+                if card.top != (constants.HEIGHT - card.h) // 2:
+                    problems.append(
+                        f"{name}: card not vertically centred "
+                        f"(top {card.top}, want {(constants.HEIGHT - card.h) // 2})")
+                for ni, ri, li in rows:
+                    if li != 1:
+                        continue
+                    if (ri.left < card.left or ri.right > card.right
+                            or ri.top < card.top or ri.bottom > card.bottom):
+                        problems.append(
+                            f"{name}: option row '{ni}' {ri} escapes card {card}")
+                    for tj, rj, lj in texts:
+                        if lj != 1 or tj == ni:
+                            continue
+                        if ri.colliderect(rj):
+                            problems.append(
+                                f"{name}: text '{tj}' {rj} collides with row bg '{ni}'")
+                # every text drawn on the card must stay inside it
+                for tj, rj, lj in texts:
+                    if lj != 1:
+                        continue
+                    if (rj.left < card.left or rj.right > card.right
+                            or rj.top < card.top or rj.bottom > card.bottom):
+                        problems.append(
+                            f"{name}: text '{tj}' {rj} escapes card {card}")
+
             info = ""
             if width:
-                left_edge = row_cx - width // 2 + 16
-                right_edge = row_cx + width // 2 - 16
+                left_edge = row_cx - width // 2 + pad
+                right_edge = row_cx + width // 2 - pad
                 labels = [rect for _, rect, _ in texts
                           if round(rect.left) == round(left_edge)]
                 values = [rect for _, rect, _ in texts
@@ -213,13 +275,15 @@ def main():
                                 f"{name}: option column collision {a} vs {b}")
                 info = (f"labels@{sorted({round(x.left) for x in labels}) or '-'} "
                         f"values@{sorted({round(x.right) for x in values}) or '-'}")
-            print(f"{name:10} texts {len(texts):3}  {info}")
+            print(f"{name:10} texts {len(texts):3} rows {len(rows):2}  {info}")
 
         game.state = "game"
         game.paused = False
         game.game_over = False
     finally:
         r.blit_t = real_blit_t2
+        r._option_row = real_option_row
+        r.panel = real_panel2
         r.draw_over = real_draw_over
         r.draw_pause = real_draw_pause
 

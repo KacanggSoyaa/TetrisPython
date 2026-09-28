@@ -12,11 +12,11 @@
         "restart": "R"
     },
     "options": {
-        "difficulty": "hard",
+        "difficulty": "easy",
         "line_goal": 10,
-        "das_delay": 110,
-        "das_repeat": 20,
-        "soft_drop_ms": 17
+        "das_delay": 80,
+        "das_repeat": 25,
+        "soft_drop_ms": 12
     },
-    "high": 918
+    "high": 2823
 }
